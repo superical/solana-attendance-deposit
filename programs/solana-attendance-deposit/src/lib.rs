@@ -44,16 +44,16 @@ pub mod solana_attendance_deposit {
         course.register(student.key())
     }
 
-    pub fn create_lesson(ctx: Context<CreateLesson>, lesson_id: u8, attendance_deadline: u64) -> Result<()> {
+    pub fn create_lesson(ctx: Context<CreateLesson>, attendance_deadline: u64) -> Result<()> {
         require_keys_eq!(ctx.accounts.manager.key(), ctx.accounts.authority.manager.key(), ErrorCode::UnauthorizedAccess);
 
         let course = &mut ctx.accounts.course;
         let lesson = &mut ctx.accounts.lesson;
 
         let next_lesson_id = course.last_lesson_id + 1;
-        require!(lesson_id == next_lesson_id, ErrorCode::CreateLessonNotLatest);
+        // require!(lesson_id == next_lesson_id, ErrorCode::CreateLessonNotLatest);
 
-        if lesson_id > course.num_of_lessons {
+        if next_lesson_id > course.num_of_lessons {
             return Err(ErrorCode::ExceededCourseLessons.into());
         }
 
@@ -77,6 +77,8 @@ pub mod solana_attendance_deposit {
         if attendance.attendance.contains(&lesson_id) {
             return Err(ErrorCode::AttendanceAlreadyMarked.into());
         }
+
+        // TODO: attendance within deadline
 
         attendance.course = course.key();
         attendance.student = student.key();
@@ -156,13 +158,13 @@ pub struct Registration<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(lesson_id: u8, attendance_deadline: u64)]
+#[instruction(attendance_deadline: u64)]
 pub struct CreateLesson<'info> {
     #[account(
     init,
     payer = manager,
     space = 8 + std::mem::size_of::< Lesson > (),
-    seeds = [course.key().as_ref(), & (lesson_id).to_be_bytes()],
+    seeds = [course.key().as_ref(), & (course.last_lesson_id + 1).to_be_bytes()],
     bump,
     )]
     pub lesson: Account<'info, Lesson>,
@@ -249,6 +251,12 @@ impl Course {
 
         Ok(())
     }
+
+    // pub fn create_lesson(&mut self, lesson: &mut Account<Lesson>, lesson_id: u8, attendance_deadline: u64) -> Result<()> {
+    //     self.last_lesson_id = lesson_id;
+    //
+    //     Ok(())
+    // }
 }
 
 #[error_code]

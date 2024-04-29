@@ -500,7 +500,7 @@ describe("solana-attendance-deposit", () => {
 
       try {
         await program.methods
-          .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+          .createLesson(new anchor.BN(attendanceDeadline))
           .accounts({
             course: coursePda,
             manager: student1.publicKey,
@@ -530,7 +530,7 @@ describe("solana-attendance-deposit", () => {
       );
 
       await program.methods
-        .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+        .createLesson( new anchor.BN(attendanceDeadline))
         .accounts({
           course: coursePda,
           manager: courseManager.publicKey,
@@ -559,7 +559,7 @@ describe("solana-attendance-deposit", () => {
 
       try {
         await program.methods
-          .createLesson(1, new anchor.BN(attendanceDeadline))
+          .createLesson( new anchor.BN(attendanceDeadline))
           .accounts({
             course: coursePda,
             manager: courseManager.publicKey,
@@ -573,7 +573,7 @@ describe("solana-attendance-deposit", () => {
         expect(true, "Transaction did not revert as expected").to.be.false;
       } catch (e: unknown) {
         expect((e as anchor.AnchorError).message).to.contain(
-          "custom program error: 0x0"
+          "ConstraintSeeds"
         );
       }
     });
@@ -589,7 +589,7 @@ describe("solana-attendance-deposit", () => {
       );
 
       await program.methods
-        .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+        .createLesson(new anchor.BN(attendanceDeadline))
         .accounts({
           course: coursePda,
           manager: courseManager.publicKey,
@@ -611,7 +611,7 @@ describe("solana-attendance-deposit", () => {
 
       try {
         await program.methods
-          .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+          .createLesson( new anchor.BN(attendanceDeadline))
           .accounts({
             course: coursePda,
             manager: courseManager.publicKey,
@@ -631,7 +631,7 @@ describe("solana-attendance-deposit", () => {
     });
   });
 
-  describe.only("Mark attendance", () => {
+  describe("Mark attendance", () => {
     const courseTitle = "Course Title - Mark Attendance";
     let coursePda: anchor.web3.PublicKey;
 
@@ -681,7 +681,7 @@ describe("solana-attendance-deposit", () => {
         program.programId
       );
       await program.methods
-        .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+        .createLesson(new anchor.BN(attendanceDeadline))
         .accounts({
           course: coursePda,
           manager: courseManager.publicKey,
