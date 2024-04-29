@@ -25,6 +25,7 @@ describe("solana-attendance-deposit", () => {
 
   const splMintAuthority = anchor.web3.Keypair.generate();
 
+  const programAuthority = anchor.web3.Keypair.generate();
   const courseManager = anchor.web3.Keypair.generate();
   const student1 = anchor.web3.Keypair.generate();
   const student2 = anchor.web3.Keypair.generate();
@@ -128,10 +129,54 @@ describe("solana-attendance-deposit", () => {
     let coursePda: anchor.web3.PublicKey;
 
     before(async () => {
+      await program.methods
+        .initialize()
+        .accounts({
+          authority: programAuthority.publicKey,
+          signer: courseManager.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([courseManager, programAuthority])
+        .rpc();
+
       [coursePda] = anchor.web3.PublicKey.findProgramAddressSync(
         [Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle))],
         program.programId
       );
+    });
+
+    it("should not allow anyone other than the course manager to create courses", async () => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      try {
+        await program.methods
+          .createCourse(
+            courseTitle,
+            new anchor.BN(250),
+            new anchor.BN(timestamp + 60 * 60 * 24 * 7)
+          )
+          .accounts({
+            course: coursePda,
+            manager: student1.publicKey,
+            authority: programAuthority.publicKey,
+            usdcMint: usdcMint,
+            courseUsdc: getAssociatedTokenAddressSync(
+              usdcMint,
+              coursePda,
+              true
+            ),
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([student1])
+          .rpc();
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain(
+          "UnauthorizedAccess"
+        );
+      }
     });
 
     it("should initialise a new course", async () => {
@@ -145,6 +190,7 @@ describe("solana-attendance-deposit", () => {
         .accounts({
           course: coursePda,
           manager: courseManager.publicKey,
+          authority: programAuthority.publicKey,
           usdcMint: usdcMint,
           courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -160,7 +206,7 @@ describe("solana-attendance-deposit", () => {
     });
   });
 
-  describe.only("Student Registration", () => {
+  describe("Student Registration", () => {
     const courseTitle = "Course Title - Registration";
     let coursePda: anchor.web3.PublicKey;
 
@@ -185,6 +231,7 @@ describe("solana-attendance-deposit", () => {
         .accounts({
           course: coursePda,
           manager: courseManager.publicKey,
+          authority: programAuthority.publicKey,
           usdcMint: usdcMint,
           courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
