@@ -15,11 +15,11 @@ pub mod solana_attendance_deposit {
         Ok(())
     }
 
-    pub fn create_course(ctx: Context<NewCourse>, name: String, deposit: u64, lock_until: u64) -> Result<()> {
+    pub fn create_course(ctx: Context<NewCourse>, name: String, deposit: u64, lock_until: u64, num_of_lessons: u8) -> Result<()> {
         require_keys_eq!(ctx.accounts.manager.key(), ctx.accounts.authority.manager.key(), ErrorCode::UnauthorizedAccess);
 
         let course = &mut ctx.accounts.course;
-        course.new(name, ctx.accounts.manager.key(), deposit, lock_until)
+        course.new(name, ctx.accounts.manager.key(), deposit, lock_until, num_of_lessons)
     }
 
     pub fn register(ctx: Context<Registration>) -> Result<()> {
@@ -42,6 +42,47 @@ pub mod solana_attendance_deposit {
         token::transfer(cpi_ctx, course.deposit)?;
 
         course.register(student.key())
+    }
+
+    pub fn create_lesson(ctx: Context<CreateLesson>, lesson_id: u8, attendance_deadline: u64) -> Result<()> {
+        require_keys_eq!(ctx.accounts.manager.key(), ctx.accounts.authority.manager.key(), ErrorCode::UnauthorizedAccess);
+
+        let course = &mut ctx.accounts.course;
+        let lesson = &mut ctx.accounts.lesson;
+
+        let next_lesson_id = course.last_lesson_id + 1;
+        require!(lesson_id == next_lesson_id, ErrorCode::CreateLessonNotLatest);
+
+        if lesson_id > course.num_of_lessons {
+            return Err(ErrorCode::ExceededCourseLessons.into());
+        }
+
+        course.last_lesson_id = next_lesson_id;
+        lesson.course = course.key();
+        lesson.lesson_id = next_lesson_id;
+        lesson.attendance_deadline = attendance_deadline;
+
+        Ok(())
+    }
+
+    pub fn mark_attendance(ctx: Context<MarkAttendance>, lesson_id: u8) -> Result<()> {
+        let course = &mut ctx.accounts.course;
+        let student = &ctx.accounts.student;
+        let attendance = &mut ctx.accounts.attendance;
+
+        if !course.students.contains(&student.key()) {
+            return Err(ErrorCode::StudentNotEnrolled.into());
+        }
+
+        if attendance.attendance.contains(&lesson_id) {
+            return Err(ErrorCode::AttendanceAlreadyMarked.into());
+        }
+
+        attendance.course = course.key();
+        attendance.student = student.key();
+        attendance.attendance.push(lesson_id);
+
+        Ok(())
     }
 }
 
@@ -114,6 +155,47 @@ pub struct Registration<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(lesson_id: u8, attendance_deadline: u64)]
+pub struct CreateLesson<'info> {
+    #[account(
+    init,
+    payer = manager,
+    space = 8 + std::mem::size_of::< Lesson > (),
+    seeds = [course.key().as_ref(), & (lesson_id).to_be_bytes()],
+    bump,
+    )]
+    pub lesson: Account<'info, Lesson>,
+    #[account(mut)]
+    pub course: Account<'info, Course>,
+    #[account(mut)]
+    pub manager: Signer<'info>,
+    pub authority: Account<'info, CourseManager>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct MarkAttendance<'info> {
+    #[account(
+    mut,
+    seeds = [course.name.as_bytes()],
+    bump,
+    )]
+    pub course: Account<'info, Course>,
+    #[account(
+    init_if_needed,
+    payer = student,
+    space = 8 + std::mem::size_of::< Attendance > () + course.num_of_lessons as usize,
+    seeds = [course.name.as_bytes(), student.key().as_ref()],
+    bump,
+    )]
+    pub attendance: Account<'info, Attendance>,
+    pub lesson: Account<'info, Lesson>,
+    #[account(mut)]
+    pub student: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 pub struct Course {
     pub name: String,
@@ -121,6 +203,8 @@ pub struct Course {
     pub students: Vec<Pubkey>,
     pub deposit: u64,
     pub lock_until: u64,
+    pub num_of_lessons: u8,
+    pub last_lesson_id: u8,
 }
 
 #[account]
@@ -128,14 +212,30 @@ pub struct CourseManager {
     pub manager: Pubkey,
 }
 
+#[account]
+pub struct Lesson {
+    pub course: Pubkey,
+    pub lesson_id: u8,
+    pub attendance_deadline: u64,
+}
+
+#[account]
+pub struct Attendance {
+    pub course: Pubkey,
+    pub student: Pubkey,
+    pub attendance: Vec<u8>,
+}
+
 impl Course {
     pub const MAXIMUM_SIZE: usize = 32 + 32 + 32 + 8 + 8;
 
-    pub fn new(&mut self, name: String, manager: Pubkey, deposit: u64, lock_until: u64) -> Result<()> {
+    pub fn new(&mut self, name: String, manager: Pubkey, deposit: u64, lock_until: u64, num_of_lessons: u8) -> Result<()> {
         self.name = name;
         self.manager = manager;
         self.deposit = deposit;
         self.lock_until = lock_until;
+        self.num_of_lessons = num_of_lessons;
+        self.last_lesson_id = 0;
 
         Ok(())
     }
@@ -161,4 +261,7 @@ pub enum ErrorCode {
     InsufficientUsdcDeposit,
     #[msg("Unauthorised access")]
     UnauthorizedAccess,
+    ExceededCourseLessons,
+    CreateLessonNotLatest,
+    AttendanceAlreadyMarked,
 }

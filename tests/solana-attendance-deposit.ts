@@ -122,6 +122,16 @@ describe("solana-attendance-deposit", () => {
       splMintAuthority.publicKey,
       1000 * 10 ** 6
     );
+
+    await program.methods
+      .initialize()
+      .accounts({
+        authority: programAuthority.publicKey,
+        signer: courseManager.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([courseManager, programAuthority])
+      .rpc();
   });
 
   describe("Initialise a new course", () => {
@@ -129,16 +139,6 @@ describe("solana-attendance-deposit", () => {
     let coursePda: anchor.web3.PublicKey;
 
     before(async () => {
-      await program.methods
-        .initialize()
-        .accounts({
-          authority: programAuthority.publicKey,
-          signer: courseManager.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .signers([courseManager, programAuthority])
-        .rpc();
-
       [coursePda] = anchor.web3.PublicKey.findProgramAddressSync(
         [Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle))],
         program.programId
@@ -152,7 +152,8 @@ describe("solana-attendance-deposit", () => {
           .createCourse(
             courseTitle,
             new anchor.BN(250),
-            new anchor.BN(timestamp + 60 * 60 * 24 * 7)
+            new anchor.BN(timestamp + 60 * 60 * 24 * 7),
+            3
           )
           .accounts({
             course: coursePda,
@@ -185,7 +186,8 @@ describe("solana-attendance-deposit", () => {
         .createCourse(
           courseTitle,
           new anchor.BN(250),
-          new anchor.BN(timestamp + 60 * 60 * 24 * 7)
+          new anchor.BN(timestamp + 60 * 60 * 24 * 7),
+          3
         )
         .accounts({
           course: coursePda,
@@ -226,7 +228,8 @@ describe("solana-attendance-deposit", () => {
         .createCourse(
           courseTitle,
           new anchor.BN(250 * 10 ** 6),
-          new anchor.BN(lockUntilTimestamp)
+          new anchor.BN(lockUntilTimestamp),
+          3
         )
         .accounts({
           course: coursePda,
@@ -442,6 +445,426 @@ describe("solana-attendance-deposit", () => {
           );
         }
       });
+    });
+  });
+
+  describe("Create Lesson", () => {
+    const courseTitle = "Course Title - Create Lesson";
+    let coursePda: anchor.web3.PublicKey;
+
+    let currentTimestamp: number;
+    let lockUntilTimestamp: number;
+    let attendanceDeadline: number;
+
+    before(async () => {
+      [coursePda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle))],
+        program.programId
+      );
+
+      currentTimestamp = Math.floor(Date.now() / 1000);
+      lockUntilTimestamp = currentTimestamp + 60 * 60 * 24 * 7;
+      attendanceDeadline = currentTimestamp + 60 * 10; // 10 minutes from now
+
+      await program.methods
+        .createCourse(
+          courseTitle,
+          new anchor.BN(250 * 10 ** 6),
+          new anchor.BN(lockUntilTimestamp),
+          2
+        )
+        .accounts({
+          course: coursePda,
+          manager: courseManager.publicKey,
+          authority: programAuthority.publicKey,
+          usdcMint: usdcMint,
+          courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([courseManager])
+        .rpc()
+        .catch(console.error);
+    });
+
+    it("should not allow non managers to create lesson", async () => {
+      const courseData = await program.account.course.fetch(coursePda);
+      const nextLessonId = courseData.lastLessonId + 1;
+      const lessonIdBuff = Buffer.alloc(1);
+      lessonIdBuff.writeUIntBE(nextLessonId, 0, 1);
+      const [lesson1Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [coursePda.toBytes(), lessonIdBuff],
+        program.programId
+      );
+
+      try {
+        await program.methods
+          .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+          .accounts({
+            course: coursePda,
+            manager: student1.publicKey,
+            lesson: lesson1Pda,
+            authority: programAuthority.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([student1])
+          .rpc();
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain(
+          "UnauthorizedAccess"
+        );
+      }
+    });
+
+    it("should create lesson for course", async () => {
+      const courseData = await program.account.course.fetch(coursePda);
+      const nextLessonId = courseData.lastLessonId + 1;
+      const lessonIdBuff = Buffer.alloc(1);
+      lessonIdBuff.writeUIntBE(nextLessonId, 0, 1);
+      const [lesson1Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [coursePda.toBytes(), lessonIdBuff],
+        program.programId
+      );
+
+      await program.methods
+        .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+        .accounts({
+          course: coursePda,
+          manager: courseManager.publicKey,
+          lesson: lesson1Pda,
+          authority: programAuthority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([courseManager])
+        .rpc();
+
+      const lessonData = await program.account.lesson.fetch(lesson1Pda);
+      expect(lessonData.attendanceDeadline.toNumber()).to.equal(
+        attendanceDeadline
+      );
+      expect(lessonData.lessonId).to.equal(1);
+      expect(lessonData.course.toBase58()).to.equal(coursePda.toBase58());
+    });
+
+    it("should fail when creating a repeated lesson ID", async () => {
+      const lessonIdBuff = Buffer.alloc(1);
+      lessonIdBuff.writeUIntBE(1, 0, 1);
+      const [lesson1Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [coursePda.toBytes(), lessonIdBuff],
+        program.programId
+      );
+
+      try {
+        await program.methods
+          .createLesson(1, new anchor.BN(attendanceDeadline))
+          .accounts({
+            course: coursePda,
+            manager: courseManager.publicKey,
+            lesson: lesson1Pda,
+            authority: programAuthority.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([courseManager])
+          .rpc();
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain(
+          "custom program error: 0x0"
+        );
+      }
+    });
+
+    it("should fail with ExceededCourseLessons when create more lessons than specified", async () => {
+      let courseData = await program.account.course.fetch(coursePda);
+      let nextLessonId = courseData.lastLessonId + 1;
+      let lessonIdBuff = Buffer.alloc(1);
+      lessonIdBuff.writeUIntBE(nextLessonId, 0, 1);
+      const [lesson2Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [coursePda.toBytes(), lessonIdBuff],
+        program.programId
+      );
+
+      await program.methods
+        .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+        .accounts({
+          course: coursePda,
+          manager: courseManager.publicKey,
+          lesson: lesson2Pda,
+          authority: programAuthority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([courseManager])
+        .rpc();
+
+      courseData = await program.account.course.fetch(coursePda);
+      nextLessonId = courseData.lastLessonId + 1;
+      lessonIdBuff = Buffer.alloc(1);
+      lessonIdBuff.writeUIntBE(nextLessonId, 0, 1);
+      const [lesson3Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [coursePda.toBytes(), lessonIdBuff],
+        program.programId
+      );
+
+      try {
+        await program.methods
+          .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+          .accounts({
+            course: coursePda,
+            manager: courseManager.publicKey,
+            lesson: lesson3Pda,
+            authority: programAuthority.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([courseManager])
+          .rpc();
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain(
+          "ExceededCourseLessons"
+        );
+      }
+    });
+  });
+
+  describe.only("Mark attendance", () => {
+    const courseTitle = "Course Title - Mark Attendance";
+    let coursePda: anchor.web3.PublicKey;
+
+    let currentTimestamp: number;
+    let lockUntilTimestamp: number;
+    let attendanceDeadline: number;
+
+    let lesson1Pda: anchor.web3.PublicKey;
+
+    before(async () => {
+      [coursePda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle))],
+        program.programId
+      );
+
+      currentTimestamp = Math.floor(Date.now() / 1000);
+      lockUntilTimestamp = currentTimestamp + 60 * 60 * 24 * 7;
+      attendanceDeadline = currentTimestamp + 60 * 10; // 10 minutes from now
+
+      await program.methods
+        .createCourse(
+          courseTitle,
+          new anchor.BN(250 * 10 ** 6),
+          new anchor.BN(lockUntilTimestamp),
+          2
+        )
+        .accounts({
+          course: coursePda,
+          manager: courseManager.publicKey,
+          authority: programAuthority.publicKey,
+          usdcMint: usdcMint,
+          courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([courseManager])
+        .rpc()
+        .catch(console.error);
+
+      const courseData = await program.account.course.fetch(coursePda);
+      const nextLessonId = courseData.lastLessonId + 1;
+      const lesson1IdBuff = Buffer.alloc(1);
+      lesson1IdBuff.writeUIntBE(nextLessonId, 0, 1);
+      [lesson1Pda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [coursePda.toBytes(), lesson1IdBuff],
+        program.programId
+      );
+      await program.methods
+        .createLesson(nextLessonId, new anchor.BN(attendanceDeadline))
+        .accounts({
+          course: coursePda,
+          manager: courseManager.publicKey,
+          lesson: lesson1Pda,
+          authority: programAuthority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([courseManager])
+        .rpc();
+
+      await program.methods
+        .register()
+        .accounts({
+          course: coursePda,
+          student: student1.publicKey,
+          studentUsdc: getAssociatedTokenAddressSync(
+            usdcMint,
+            student1.publicKey
+          ),
+          usdcMint: usdcMint,
+          courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([student1])
+        .rpc();
+
+      await program.methods
+        .register()
+        .accounts({
+          course: coursePda,
+          student: student2.publicKey,
+          studentUsdc: getAssociatedTokenAddressSync(
+            usdcMint,
+            student2.publicKey
+          ),
+          usdcMint: usdcMint,
+          courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([student2])
+        .rpc();
+    });
+
+    it("should allow student1 mark attendance", async () => {
+      const [attendancePda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle)),
+          student1.publicKey.toBytes(),
+        ],
+        program.programId
+      );
+
+      await program.methods
+        .markAttendance(1)
+        .accounts({
+          course: coursePda,
+          lesson: lesson1Pda,
+          student: student1.publicKey,
+          attendance: attendancePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([student1])
+        .rpc();
+
+      const attendanceData = await program.account.attendance.fetch(
+        attendancePda
+      );
+
+      expect(attendanceData.course.toBase58()).to.equal(coursePda.toBase58());
+      expect(attendanceData.student.toBase58()).to.equal(
+        student1.publicKey.toBase58()
+      );
+      expect(attendanceData.attendance[0]).to.equal(1);
+    });
+
+    it("should fail with AttendanceAlreadyMarked when attendance is already marked", async () => {
+      const [attendancePda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle)),
+          student1.publicKey.toBytes(),
+        ],
+        program.programId
+      );
+
+      try {
+        await program.methods
+          .markAttendance(1)
+          .accounts({
+            course: coursePda,
+            lesson: lesson1Pda,
+            student: student1.publicKey,
+            attendance: attendancePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([student1])
+          .rpc();
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain(
+          "AttendanceAlreadyMarked"
+        );
+      }
+    });
+
+    it("should allow student2 mark attendance", async () => {
+      const [attendancePda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle)),
+          student2.publicKey.toBytes(),
+        ],
+        program.programId
+      );
+
+      await program.methods
+        .markAttendance(1)
+        .accounts({
+          course: coursePda,
+          lesson: lesson1Pda,
+          student: student2.publicKey,
+          attendance: attendancePda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([student2])
+        .rpc();
+
+      const attendanceData = await program.account.attendance.fetch(
+        attendancePda
+      );
+
+      expect(attendanceData.course.toBase58()).to.equal(coursePda.toBase58());
+      expect(attendanceData.student.toBase58()).to.equal(
+        student2.publicKey.toBase58()
+      );
+      expect(attendanceData.attendance[0]).to.equal(1);
+    });
+
+    it("should fail when non-student mark attendance", async () => {
+      const student3 = anchor.web3.Keypair.generate();
+      const latestBlockHash = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction(
+        {
+          blockhash: latestBlockHash.blockhash,
+          lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+          signature: await provider.connection.requestAirdrop(
+            student3.publicKey,
+            LAMPORTS_PER_SOL
+          ),
+        },
+        "confirmed"
+      );
+
+      const [attendancePda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from(anchor.utils.bytes.utf8.encode(courseTitle)),
+          student3.publicKey.toBytes(),
+        ],
+        program.programId
+      );
+
+      try {
+        await program.methods
+          .markAttendance(1)
+          .accounts({
+            course: coursePda,
+            lesson: lesson1Pda,
+            student: student3.publicKey,
+            attendance: attendancePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([student3])
+          .rpc();
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain(
+          "StudentNotEnrolled."
+        );
+      }
     });
   });
 });
