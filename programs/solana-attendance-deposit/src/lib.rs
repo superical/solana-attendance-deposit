@@ -50,25 +50,14 @@ pub mod solana_attendance_deposit {
         let course = &mut ctx.accounts.course;
         let lesson = &mut ctx.accounts.lesson;
 
-        let next_lesson_id = course.last_lesson_id + 1;
-        // require!(lesson_id == next_lesson_id, ErrorCode::CreateLessonNotLatest);
-
-        if next_lesson_id > course.num_of_lessons {
-            return Err(ErrorCode::ExceededCourseLessons.into());
-        }
-
-        course.last_lesson_id = next_lesson_id;
-        lesson.course = course.key();
-        lesson.lesson_id = next_lesson_id;
-        lesson.attendance_deadline = attendance_deadline;
-
-        Ok(())
+        lesson.new(course, attendance_deadline)
     }
 
     pub fn mark_attendance(ctx: Context<MarkAttendance>, lesson_id: u8) -> Result<()> {
         let course = &mut ctx.accounts.course;
         let student = &ctx.accounts.student;
         let attendance = &mut ctx.accounts.attendance;
+        let lesson = &ctx.accounts.lesson;
 
         if !course.students.contains(&student.key()) {
             return Err(ErrorCode::StudentNotEnrolled.into());
@@ -78,7 +67,10 @@ pub mod solana_attendance_deposit {
             return Err(ErrorCode::AttendanceAlreadyMarked.into());
         }
 
-        // TODO: attendance within deadline
+        let clock = Clock::get()?;
+        if lesson.attendance_deadline < clock.unix_timestamp as u64 {
+            return Err(ErrorCode::LateForLesson.into());
+        }
 
         attendance.course = course.key();
         attendance.student = student.key();
@@ -188,6 +180,7 @@ pub struct MarkAttendance<'info> {
     init_if_needed,
     payer = student,
     space = 8 + std::mem::size_of::< Attendance > () + course.num_of_lessons as usize,
+    constraint = course.key() == lesson.course,
     seeds = [course.name.as_bytes(), student.key().as_ref()],
     bump,
     )]
@@ -228,6 +221,23 @@ pub struct Attendance {
     pub attendance: Vec<u8>,
 }
 
+impl Lesson {
+    pub fn new(&mut self, course: &mut Account<Course>, attendance_deadline: u64) -> Result<()> {
+        let next_lesson_id = course.last_lesson_id + 1;
+
+        if next_lesson_id > course.num_of_lessons {
+            return Err(ErrorCode::ExceededCourseLessons.into());
+        }
+
+        course.last_lesson_id = next_lesson_id;
+        self.course = course.key();
+        self.lesson_id = next_lesson_id;
+        self.attendance_deadline = attendance_deadline;
+
+        Ok(())
+    }
+}
+
 impl Course {
     pub const MAXIMUM_SIZE: usize = 32 + 32 + 32 + 8 + 8;
 
@@ -251,12 +261,6 @@ impl Course {
 
         Ok(())
     }
-
-    // pub fn create_lesson(&mut self, lesson: &mut Account<Lesson>, lesson_id: u8, attendance_deadline: u64) -> Result<()> {
-    //     self.last_lesson_id = lesson_id;
-    //
-    //     Ok(())
-    // }
 }
 
 #[error_code]
@@ -272,4 +276,5 @@ pub enum ErrorCode {
     ExceededCourseLessons,
     CreateLessonNotLatest,
     AttendanceAlreadyMarked,
+    LateForLesson,
 }
