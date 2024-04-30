@@ -78,6 +78,34 @@ pub mod solana_attendance_deposit {
 
         Ok(())
     }
+
+    pub fn withdraw(ctx: Context<Withdrawal>, bump: u8) -> Result<()> {
+        let course = &ctx.accounts.course;
+        let attendance = &mut ctx.accounts.attendance;
+        let student = &ctx.accounts.student;
+        let student_usdc = &mut ctx.accounts.student_usdc;
+        let course_usdc = &mut ctx.accounts.course_usdc;
+
+        require!(course.students.contains(&student.key()), ErrorCode::StudentNotEnrolled);
+        require!(course.lock_until < Clock::get()?.unix_timestamp as u64, ErrorCode::NotReadyForWithdrawal);
+
+        let seeds = &[course.name.as_bytes(), &[bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: course_usdc.to_account_info(),
+            to: student_usdc.to_account_info(),
+            authority: course.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+
+        token::transfer(cpi_ctx, course.deposit)?;
+
+        attendance.withdrawn = true;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -122,6 +150,7 @@ pub struct Registration<'info> {
     mut,
     seeds = [course.name.as_bytes()],
     bump,
+    constraint = course.last_lesson_id == 0,
     realloc = course.to_account_info().data_len() + std::mem::size_of::< Pubkey > (),
     realloc::payer = student,
     realloc::zero = false,
@@ -191,6 +220,36 @@ pub struct MarkAttendance<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct Withdrawal<'info> {
+    #[account(
+    mut,
+    seeds = [course.name.as_bytes()],
+    bump,
+    )]
+    pub course: Account<'info, Course>,
+    #[account(
+    mut,
+    constraint = ! attendance.withdrawn,
+    )]
+    pub attendance: Account<'info, Attendance>,
+    #[account(mut)]
+    pub student: Signer<'info>,
+    #[account(mut)]
+    pub student_usdc: Account<'info, TokenAccount>,
+    #[account(
+    mut,
+    constraint = course.key() == attendance.course &&
+    student.key() == attendance.student &&
+    attendance.attendance.len() == course.num_of_lessons as usize &&
+    ! attendance.withdrawn,
+    )]
+    pub course_usdc: Account<'info, TokenAccount>,
+    pub usdc_mint: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
 #[account]
 pub struct Course {
     pub name: String,
@@ -219,6 +278,7 @@ pub struct Attendance {
     pub course: Pubkey,
     pub student: Pubkey,
     pub attendance: Vec<u8>,
+    pub withdrawn: bool,
 }
 
 impl Lesson {
@@ -277,4 +337,5 @@ pub enum ErrorCode {
     CreateLessonNotLatest,
     AttendanceAlreadyMarked,
     LateForLesson,
+    NotReadyForWithdrawal,
 }
