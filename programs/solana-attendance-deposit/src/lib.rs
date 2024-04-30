@@ -131,8 +131,6 @@ impl Lesson {
 }
 
 impl Course {
-    pub const MAXIMUM_SIZE: usize = 32 + 32 + 32 + 8 + 8;
-
     pub fn new(&mut self, name: String, manager: Pubkey, deposit: u64, lock_until: u64, num_of_lessons: u8) -> Result<()> {
         self.name = name;
         self.manager = manager;
