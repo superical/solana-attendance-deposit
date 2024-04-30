@@ -168,7 +168,6 @@ describe("solana-attendance-deposit", () => {
             program,
             courseManager: student1,
             programAuthority,
-            usdcMint,
           }
         );
 
@@ -192,7 +191,6 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
-          usdcMint,
         }
       );
 
@@ -227,7 +225,6 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
-          usdcMint,
         }
       );
     });
@@ -398,7 +395,6 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
-          usdcMint,
         }
       );
     });
@@ -543,7 +539,6 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
-          usdcMint,
         }
       );
 
@@ -820,7 +815,6 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
-          usdcMint,
         }
       );
 

@@ -118,7 +118,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(name: String, deposit: u64, lock_until: u64)]
+#[instruction(name: String)]
 pub struct NewCourse<'info> {
     #[account(
     init,
@@ -131,16 +131,6 @@ pub struct NewCourse<'info> {
     #[account(mut)]
     pub manager: Signer<'info>,
     pub authority: Account<'info, CourseManager>,
-    #[account(
-    init_if_needed,
-    payer = manager,
-    associated_token::mint = usdc_mint,
-    associated_token::authority = course,
-    )]
-    pub course_usdc: Account<'info, TokenAccount>,
-    pub usdc_mint: Account<'info, Mint>,
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 

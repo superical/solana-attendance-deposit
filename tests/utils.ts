@@ -120,12 +120,10 @@ export const createCourse = async (
     program,
     courseManager,
     programAuthority,
-    usdcMint,
   }: {
     program: anchor.Program<SolanaAttendanceDeposit>;
     courseManager: anchor.web3.Keypair;
     programAuthority: anchor.web3.Keypair;
-    usdcMint: anchor.web3.PublicKey;
   }
 ) => {
   const [coursePda] = getCoursePda(program, courseTitle);
@@ -140,10 +138,6 @@ export const createCourse = async (
       course: coursePda,
       manager: courseManager.publicKey,
       authority: programAuthority.publicKey,
-      usdcMint: usdcMint,
-      courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: anchor.web3.SystemProgram.programId,
     })
     .signers([courseManager])
