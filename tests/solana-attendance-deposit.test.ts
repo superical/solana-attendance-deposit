@@ -168,6 +168,7 @@ describe("solana-attendance-deposit", () => {
             program,
             courseManager: student1,
             programAuthority,
+            depositTokenMint: usdcMint,
           }
         );
 
@@ -191,6 +192,7 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
+          depositTokenMint: usdcMint,
         }
       );
 
@@ -225,6 +227,7 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
+          depositTokenMint: usdcMint,
         }
       );
     });
@@ -239,7 +242,7 @@ describe("solana-attendance-deposit", () => {
 
         await registerCourse({
           program,
-          usdcMint,
+          depositTokenMint: usdcMint,
           student: student1,
           courseTitle,
         });
@@ -275,7 +278,7 @@ describe("solana-attendance-deposit", () => {
         try {
           await registerCourse({
             program,
-            usdcMint,
+            depositTokenMint: usdcMint,
             student: student1,
             courseTitle,
           });
@@ -299,7 +302,7 @@ describe("solana-attendance-deposit", () => {
 
         await registerCourse({
           program,
-          usdcMint,
+          depositTokenMint: usdcMint,
           student: student2,
           courseTitle,
         });
@@ -355,7 +358,7 @@ describe("solana-attendance-deposit", () => {
         try {
           await registerCourse({
             program,
-            usdcMint,
+            depositTokenMint: usdcMint,
             student: student3,
             courseTitle,
           });
@@ -395,6 +398,7 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
+          depositTokenMint: usdcMint,
         }
       );
     });
@@ -453,7 +457,7 @@ describe("solana-attendance-deposit", () => {
       try {
         await registerCourse({
           program,
-          usdcMint,
+          depositTokenMint: usdcMint,
           student: student1,
           courseTitle,
         });
@@ -539,13 +543,14 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
+          depositTokenMint: usdcMint,
         }
       );
 
       // Register Student1 for the course
       await registerCourse({
         program,
-        usdcMint,
+        depositTokenMint: usdcMint,
         student: student1,
         courseTitle,
       });
@@ -553,7 +558,7 @@ describe("solana-attendance-deposit", () => {
       // Register Student2 for the course
       await registerCourse({
         program,
-        usdcMint,
+        depositTokenMint: usdcMint,
         student: student2,
         courseTitle,
       });
@@ -815,12 +820,13 @@ describe("solana-attendance-deposit", () => {
           program,
           courseManager,
           programAuthority,
+          depositTokenMint: usdcMint,
         }
       );
 
       await registerCourse({
         program,
-        usdcMint,
+        depositTokenMint: usdcMint,
         student: student1,
         courseTitle,
       });
@@ -851,7 +857,7 @@ describe("solana-attendance-deposit", () => {
             program,
             student: student1,
             courseTitle,
-            usdcMint,
+            depositTokenMint: usdcMint,
           });
 
           expect(true, "Transaction did not revert as expected").to.be.false;
@@ -886,7 +892,7 @@ describe("solana-attendance-deposit", () => {
             program,
             student: student1,
             courseTitle,
-            usdcMint,
+            depositTokenMint: usdcMint,
           });
 
           expect(true, "Transaction did not revert as expected").to.be.false;
@@ -919,7 +925,7 @@ describe("solana-attendance-deposit", () => {
             program,
             student: student2,
             courseTitle,
-            usdcMint,
+            depositTokenMint: usdcMint,
           });
 
           expect(true, "Transaction did not revert as expected").to.be.false;
@@ -936,7 +942,7 @@ describe("solana-attendance-deposit", () => {
             program,
             student: student1,
             courseTitle,
-            usdcMint,
+            depositTokenMint: usdcMint,
           });
 
           expect(true, "Transaction did not revert as expected").to.be.false;
@@ -966,7 +972,7 @@ describe("solana-attendance-deposit", () => {
           program,
           student: student1,
           courseTitle,
-          usdcMint,
+          depositTokenMint: usdcMint,
         }).catch(console.error);
 
         const student1UsdcBalanceAfter = (

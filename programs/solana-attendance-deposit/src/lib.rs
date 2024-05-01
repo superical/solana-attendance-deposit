@@ -24,21 +24,22 @@ pub mod solana_attendance_deposit {
         require_keys_eq!(ctx.accounts.manager.key(), ctx.accounts.authority.manager.key(), ErrorCode::UnauthorizedAccess);
 
         let course = &mut ctx.accounts.course;
-        course.new(name, ctx.accounts.manager.key(), deposit, lock_until, num_of_lessons)
+        let deposit_token = ctx.accounts.deposit_token_mint.key();
+        course.new(name, ctx.accounts.manager.key(), deposit, lock_until, num_of_lessons, deposit_token)
     }
 
     pub fn register(ctx: Context<Registration>) -> Result<()> {
         let course = &mut ctx.accounts.course;
         let student = &ctx.accounts.student;
 
-        let student_balance = ctx.accounts.student_usdc.amount;
+        let student_balance = ctx.accounts.student_deposit_token.amount;
         if student_balance < course.deposit {
             return Err(ErrorCode::InsufficientUsdcDeposit.into());
         }
 
         let cpi_accounts = Transfer {
-            from: ctx.accounts.student_usdc.to_account_info(),
-            to: ctx.accounts.course_usdc.to_account_info(),
+            from: ctx.accounts.student_deposit_token.to_account_info(),
+            to: ctx.accounts.course_deposit_token.to_account_info(),
             authority: ctx.accounts.student.to_account_info(),
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
@@ -88,8 +89,8 @@ pub mod solana_attendance_deposit {
         let course = &ctx.accounts.course;
         let attendance = &mut ctx.accounts.attendance;
         let student = &ctx.accounts.student;
-        let student_usdc = &mut ctx.accounts.student_usdc;
-        let course_usdc = &mut ctx.accounts.course_usdc;
+        let student_usdc = &mut ctx.accounts.student_deposit_token;
+        let course_usdc = &mut ctx.accounts.course_deposit_token;
 
         require!(course.students.contains(&student.key()), ErrorCode::StudentNotEnrolled);
         require!(course.lock_until < Clock::get()?.unix_timestamp as u64, ErrorCode::NotReadyForWithdrawal);
@@ -131,13 +132,14 @@ impl Lesson {
 }
 
 impl Course {
-    pub fn new(&mut self, name: String, manager: Pubkey, deposit: u64, lock_until: u64, num_of_lessons: u8) -> Result<()> {
+    pub fn new(&mut self, name: String, manager: Pubkey, deposit: u64, lock_until: u64, num_of_lessons: u8, deposit_token: Pubkey) -> Result<()> {
         self.name = name;
         self.manager = manager;
         self.deposit = deposit;
         self.lock_until = lock_until;
         self.num_of_lessons = num_of_lessons;
         self.last_lesson_id = 0;
+        self.deposit_token = deposit_token;
 
         Ok(())
     }

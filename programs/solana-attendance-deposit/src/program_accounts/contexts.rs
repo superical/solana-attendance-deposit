@@ -25,6 +25,7 @@ pub struct NewCourse<'info> {
     pub course: Account<'info, Course>,
     #[account(mut)]
     pub manager: Signer<'info>,
+    pub deposit_token_mint: Account<'info, Mint>,
     pub authority: Account<'info, CourseManager>,
     pub system_program: Program<'info, System>,
 }
@@ -46,18 +47,18 @@ pub struct Registration<'info> {
     #[account(
     init_if_needed,
     payer = student,
-    associated_token::mint = usdc_mint,
+    associated_token::mint = deposit_token_mint,
     associated_token::authority = student,
     )]
-    pub student_usdc: Account<'info, TokenAccount>,
+    pub student_deposit_token: Account<'info, TokenAccount>,
     #[account(
     init_if_needed,
     payer = student,
-    associated_token::mint = usdc_mint,
+    associated_token::mint = deposit_token_mint,
     associated_token::authority = course,
     )]
-    pub course_usdc: Account<'info, TokenAccount>,
-    pub usdc_mint: Account<'info, Mint>,
+    pub course_deposit_token: Account<'info, TokenAccount>,
+    pub deposit_token_mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -121,7 +122,7 @@ pub struct Withdrawal<'info> {
     #[account(mut)]
     pub student: Signer<'info>,
     #[account(mut)]
-    pub student_usdc: Account<'info, TokenAccount>,
+    pub student_deposit_token: Account<'info, TokenAccount>,
     #[account(
     mut,
     constraint = course.key() == attendance.course &&
@@ -129,8 +130,8 @@ pub struct Withdrawal<'info> {
     attendance.attendance.len() == course.num_of_lessons as usize &&
     ! attendance.withdrawn,
     )]
-    pub course_usdc: Account<'info, TokenAccount>,
-    pub usdc_mint: Account<'info, Mint>,
+    pub course_deposit_token: Account<'info, TokenAccount>,
+    pub deposit_token_mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }

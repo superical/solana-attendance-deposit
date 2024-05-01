@@ -85,12 +85,12 @@ export const markAttendance = async (
 
 export const registerCourse = async ({
   program,
-  usdcMint,
+  depositTokenMint,
   student,
   courseTitle,
 }: {
   program: anchor.Program<SolanaAttendanceDeposit>;
-  usdcMint: anchor.web3.PublicKey;
+  depositTokenMint: anchor.web3.PublicKey;
   student: anchor.web3.Keypair;
   courseTitle: string;
 }) => {
@@ -100,9 +100,16 @@ export const registerCourse = async ({
     .accounts({
       course: coursePda,
       student: student.publicKey,
-      studentUsdc: getAssociatedTokenAddressSync(usdcMint, student.publicKey),
-      usdcMint: usdcMint,
-      courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
+      studentDepositToken: getAssociatedTokenAddressSync(
+        depositTokenMint,
+        student.publicKey
+      ),
+      depositTokenMint,
+      courseDepositToken: getAssociatedTokenAddressSync(
+        depositTokenMint,
+        coursePda,
+        true
+      ),
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: anchor.web3.SystemProgram.programId,
@@ -120,10 +127,12 @@ export const createCourse = async (
     program,
     courseManager,
     programAuthority,
+    depositTokenMint,
   }: {
     program: anchor.Program<SolanaAttendanceDeposit>;
     courseManager: anchor.web3.Keypair;
     programAuthority: anchor.web3.Keypair;
+    depositTokenMint: anchor.web3.PublicKey;
   }
 ) => {
   const [coursePda] = getCoursePda(program, courseTitle);
@@ -138,6 +147,7 @@ export const createCourse = async (
       course: coursePda,
       manager: courseManager.publicKey,
       authority: programAuthority.publicKey,
+      depositTokenMint,
       systemProgram: anchor.web3.SystemProgram.programId,
     })
     .signers([courseManager])
@@ -147,12 +157,12 @@ export const createCourse = async (
 export const withdrawDeposit = async ({
   program,
   student,
-  usdcMint,
+  depositTokenMint,
   courseTitle,
 }: {
   program: anchor.Program<SolanaAttendanceDeposit>;
   student: anchor.web3.Keypair;
-  usdcMint: anchor.web3.PublicKey;
+  depositTokenMint: anchor.web3.PublicKey;
   courseTitle: string;
 }) => {
   const [coursePda, coursePdaBump] = getCoursePda(program, courseTitle);
@@ -168,9 +178,16 @@ export const withdrawDeposit = async ({
     .accounts({
       course: coursePda,
       student: student.publicKey,
-      studentUsdc: getAssociatedTokenAddressSync(usdcMint, student.publicKey),
-      courseUsdc: getAssociatedTokenAddressSync(usdcMint, coursePda, true),
-      usdcMint: usdcMint,
+      studentDepositToken: getAssociatedTokenAddressSync(
+        depositTokenMint,
+        student.publicKey
+      ),
+      courseDepositToken: getAssociatedTokenAddressSync(
+        depositTokenMint,
+        coursePda,
+        true
+      ),
+      depositTokenMint,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       attendance: attendancePda,
       tokenProgram: TOKEN_PROGRAM_ID,

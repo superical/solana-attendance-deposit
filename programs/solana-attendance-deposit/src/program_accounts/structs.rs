@@ -9,6 +9,7 @@ pub struct Course {
     pub lock_until: u64,
     pub num_of_lessons: u8,
     pub last_lesson_id: u8,
+    pub deposit_token: Pubkey,
 }
 
 #[account]
