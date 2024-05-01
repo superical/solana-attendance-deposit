@@ -5,7 +5,13 @@ use crate::program_accounts::structs::*;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, payer = signer, space = 8 + 32)]
+    #[account(
+    init,
+    payer = signer,
+    space = 8 + 32,
+    seeds = [b"authority"],
+    bump,
+    )]
     pub authority: Account<'info, CourseManager>,
     #[account(mut)]
     pub signer: Signer<'info>,
@@ -26,6 +32,10 @@ pub struct NewCourse<'info> {
     #[account(mut)]
     pub manager: Signer<'info>,
     pub deposit_token_mint: Account<'info, Mint>,
+    #[account(
+    seeds = [b"authority"],
+    bump,
+    )]
     pub authority: Account<'info, CourseManager>,
     pub system_program: Program<'info, System>,
 }
@@ -81,6 +91,10 @@ pub struct CreateLesson<'info> {
     pub course: Account<'info, Course>,
     #[account(mut)]
     pub manager: Signer<'info>,
+    #[account(
+    seeds = [b"authority"],
+    bump,
+    )]
     pub authority: Account<'info, CourseManager>,
     pub system_program: Program<'info, System>,
 }

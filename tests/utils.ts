@@ -17,7 +17,7 @@ export const createLesson = async (
   }: {
     program: anchor.Program<SolanaAttendanceDeposit>;
     courseManager: anchor.web3.Keypair;
-    programAuthority: anchor.web3.Keypair;
+    programAuthority: anchor.web3.PublicKey;
     lessonId: number;
     courseTitle: string;
   }
@@ -36,7 +36,7 @@ export const createLesson = async (
       course: coursePda,
       manager: courseManager.publicKey,
       lesson: lessonPda,
-      authority: programAuthority.publicKey,
+      authority: programAuthority,
       systemProgram: anchor.web3.SystemProgram.programId,
     })
     .signers([courseManager])
@@ -131,7 +131,7 @@ export const createCourse = async (
   }: {
     program: anchor.Program<SolanaAttendanceDeposit>;
     courseManager: anchor.web3.Keypair;
-    programAuthority: anchor.web3.Keypair;
+    programAuthority: anchor.web3.PublicKey;
     depositTokenMint: anchor.web3.PublicKey;
   }
 ) => {
@@ -146,7 +146,7 @@ export const createCourse = async (
     .accounts({
       course: coursePda,
       manager: courseManager.publicKey,
-      authority: programAuthority.publicKey,
+      authority: programAuthority,
       depositTokenMint,
       systemProgram: anchor.web3.SystemProgram.programId,
     })

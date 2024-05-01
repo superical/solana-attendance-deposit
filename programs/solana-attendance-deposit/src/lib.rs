@@ -15,6 +15,11 @@ pub mod solana_attendance_deposit {
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let course_manager = &mut ctx.accounts.authority;
+
+        if course_manager.manager != Pubkey::default() {
+            return Err(ErrorCode::UnauthorizedAccess.into());
+        }
+
         course_manager.manager = ctx.accounts.signer.key();
 
         Ok(())

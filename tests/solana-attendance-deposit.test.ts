@@ -32,11 +32,11 @@ describe("solana-attendance-deposit", () => {
 
   const splMintAuthority = anchor.web3.Keypair.generate();
 
-  const programAuthority = anchor.web3.Keypair.generate();
   const courseManager = anchor.web3.Keypair.generate();
   const student1 = anchor.web3.Keypair.generate();
   const student2 = anchor.web3.Keypair.generate();
 
+  let programAuthority: anchor.web3.PublicKey;
   let student1UsdcAta: Account;
   let student2UsdcAta: Account;
   let usdcMint: anchor.web3.PublicKey;
@@ -134,19 +134,45 @@ describe("solana-attendance-deposit", () => {
       1000 * 10 ** 6
     );
 
+    [programAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from(anchor.utils.bytes.utf8.encode("authority"))],
+      program.programId
+    );
+
     await program.methods
       .initialize()
       .accounts({
-        authority: programAuthority.publicKey,
+        authority: programAuthority,
         signer: courseManager.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
-      .signers([courseManager, programAuthority])
+      .signers([courseManager])
       .rpc();
+  });
+
+  describe("Initialise the program", () => {
+    it("should fail if initialise the programme again", async () => {
+      try {
+        await program.methods
+          .initialize()
+          .accounts({
+            authority: programAuthority,
+            signer: courseManager.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([courseManager])
+          .rpc();
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain("error");
+      }
+    });
   });
 
   describe("Initialise a new course", () => {
     const courseTitle = "Learn Solana";
+    const timestamp = Math.floor(Date.now() / 1000);
     let coursePda: anchor.web3.PublicKey;
 
     before(async () => {
@@ -180,9 +206,36 @@ describe("solana-attendance-deposit", () => {
       }
     });
 
-    it("should initialise a new course", async () => {
-      const timestamp = Math.floor(Date.now() / 1000);
+    it("should fail when given an invalid authority account", async () => {
+      const [badProgramAuthority] =
+        anchor.web3.PublicKey.findProgramAddressSync(
+          [Buffer.from(anchor.utils.bytes.utf8.encode("badAuthority"))],
+          program.programId
+        );
 
+      try {
+        await createCourse(
+          courseTitle,
+          new anchor.BN(250 * 10 ** 6),
+          timestamp + 60 * 60 * 24 * 7,
+          3,
+          {
+            program,
+            courseManager,
+            programAuthority: badProgramAuthority,
+            depositTokenMint: usdcMint,
+          }
+        );
+
+        expect(true, "Transaction did not revert as expected").to.be.false;
+      } catch (e: unknown) {
+        expect((e as anchor.AnchorError).message).to.contain(
+          "expected this account to be already initialized"
+        );
+      }
+    });
+
+    it("should initialise a new course", async () => {
       await createCourse(
         courseTitle,
         new anchor.BN(250 * 10 ** 6),
