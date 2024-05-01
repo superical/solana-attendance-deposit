@@ -49,12 +49,14 @@ pub struct Registration<'info> {
     payer = student,
     associated_token::mint = deposit_token_mint,
     associated_token::authority = student,
+    constraint = deposit_token_mint.key() == course.deposit_token,
     )]
     pub student_deposit_token: Account<'info, TokenAccount>,
     #[account(
     init_if_needed,
     payer = student,
     associated_token::mint = deposit_token_mint,
+    constraint = deposit_token_mint.key() == course.deposit_token,
     associated_token::authority = course,
     )]
     pub course_deposit_token: Account<'info, TokenAccount>,
@@ -128,7 +130,8 @@ pub struct Withdrawal<'info> {
     constraint = course.key() == attendance.course &&
     student.key() == attendance.student &&
     attendance.attendance.len() == course.num_of_lessons as usize &&
-    ! attendance.withdrawn,
+    ! attendance.withdrawn &&
+    deposit_token_mint.key() == course.deposit_token,
     )]
     pub course_deposit_token: Account<'info, TokenAccount>,
     pub deposit_token_mint: Account<'info, Mint>,

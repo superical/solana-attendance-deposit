@@ -200,6 +200,12 @@ describe("solana-attendance-deposit", () => {
 
       expect(courseData.name).to.equal(courseTitle);
     });
+
+    it("should have the correct deposit token", async () => {
+      const courseData = await program.account.course.fetch(coursePda);
+
+      expect(courseData.depositToken.toBase58()).to.equal(usdcMint.toBase58());
+    });
   });
 
   describe("Student Registration", () => {
@@ -233,62 +239,91 @@ describe("solana-attendance-deposit", () => {
     });
 
     describe("When registering student1", () => {
-      let student1UsdcBalanceBefore: bigint;
+      describe("When register with an incorrect deposit token", () => {
+        it("should fail with constraint error when paid with a different token", async () => {
+          const wrongTokenMint = await createMint(
+            provider.connection,
+            splMintAuthority,
+            splMintAuthority.publicKey,
+            null,
+            6
+          );
 
-      before(async () => {
-        student1UsdcBalanceBefore = (
-          await getAccount(provider.connection, student1UsdcAta.address)
-        ).amount;
+          try {
+            await registerCourse({
+              program,
+              depositTokenMint: wrongTokenMint,
+              student: student1,
+              courseTitle,
+            });
 
-        await registerCourse({
-          program,
-          depositTokenMint: usdcMint,
-          student: student1,
-          courseTitle,
+            expect(true, "Transaction did not revert as expected").to.be.false;
+          } catch (e: unknown) {
+            expect((e as anchor.AnchorError).message).to.contain(
+              "ConstraintRaw"
+            );
+          }
         });
       });
 
-      it("should register student1 with the course", async () => {
-        const courseData = await program.account.course.fetch(coursePda);
+      describe("When register with the correct deposit token", () => {
+        let student1UsdcBalanceBefore: bigint;
 
-        expect(courseData.students[0].toBase58()).to.equal(
-          student1.publicKey.toBase58()
-        );
-        expect(courseData.students.length).to.equal(1);
-      });
+        before(async () => {
+          student1UsdcBalanceBefore = (
+            await getAccount(provider.connection, student1UsdcAta.address)
+          ).amount;
 
-      it("should receive deposit from student1", async () => {
-        const student1UsdcBalanceAfter = (
-          await getAccount(provider.connection, student1UsdcAta.address)
-        ).amount;
-        const courseUsdcBalance = (
-          await getAccount(
-            provider.connection,
-            getAssociatedTokenAddressSync(usdcMint, coursePda, true)
-          )
-        ).amount;
-
-        expect(student1UsdcBalanceBefore - student1UsdcBalanceAfter).to.equal(
-          BigInt(250 * 10 ** 6)
-        );
-        expect(courseUsdcBalance).to.equal(BigInt(250 * 10 ** 6));
-      });
-
-      it("should not allow student1 to register again with the course", async () => {
-        try {
           await registerCourse({
             program,
             depositTokenMint: usdcMint,
             student: student1,
             courseTitle,
           });
+        });
 
-          expect(true, "Transaction did not revert as expected").to.be.false;
-        } catch (e: unknown) {
-          expect((e as anchor.AnchorError).message).to.contain(
-            "StudentAlreadyEnrolled"
+        it("should register student1 with the course", async () => {
+          const courseData = await program.account.course.fetch(coursePda);
+
+          expect(courseData.students[0].toBase58()).to.equal(
+            student1.publicKey.toBase58()
           );
-        }
+          expect(courseData.students.length).to.equal(1);
+        });
+
+        it("should receive deposit from student1", async () => {
+          const student1UsdcBalanceAfter = (
+            await getAccount(provider.connection, student1UsdcAta.address)
+          ).amount;
+          const courseUsdcBalance = (
+            await getAccount(
+              provider.connection,
+              getAssociatedTokenAddressSync(usdcMint, coursePda, true)
+            )
+          ).amount;
+
+          expect(student1UsdcBalanceBefore - student1UsdcBalanceAfter).to.equal(
+            BigInt(250 * 10 ** 6)
+          );
+          expect(courseUsdcBalance).to.equal(BigInt(250 * 10 ** 6));
+        });
+
+        it("should not allow student1 to register again with the course", async () => {
+          try {
+            await registerCourse({
+              program,
+              depositTokenMint: usdcMint,
+              student: student1,
+              courseTitle,
+            });
+
+            expect(true, "Transaction did not revert as expected").to.be.false;
+          } catch (e: unknown) {
+            expect((e as anchor.AnchorError).message).to.contain(
+              "StudentAlreadyEnrolled"
+            );
+          }
+        });
       });
     });
 
